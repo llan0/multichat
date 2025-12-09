@@ -1,8 +1,12 @@
-# go-multichat
+# multichat
 
 A real time Twitch and Kick multichat client (This is an EARLY STAGE prototype)
 
-
+<img 
+  src="https://github.com/user-attachments/assets/95b07338-8458-4aa9-9132-30899b81f406" 
+  width="200" 
+  style="border-radius:50%"
+/>
 
 ## How It Works
 
