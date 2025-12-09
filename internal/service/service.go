@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 
-	"github.com/llan0/go-chat/internal/logger"
-	"github.com/llan0/go-chat/internal/models"
+	"github.com/llan0/multichat/internal/logger"
+	"github.com/llan0/multichat/internal/models"
 	"go.uber.org/zap"
 )
 

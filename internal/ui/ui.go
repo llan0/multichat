@@ -10,9 +10,9 @@ import (
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/llan0/go-chat/internal/logger"
-	"github.com/llan0/go-chat/internal/models"
-	"github.com/llan0/go-chat/internal/service"
+	"github.com/llan0/multichat/internal/logger"
+	"github.com/llan0/multichat/internal/models"
+	"github.com/llan0/multichat/internal/service"
 	"go.uber.org/zap"
 )
 

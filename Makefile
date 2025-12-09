@@ -1,13 +1,13 @@
 .PHONY: build run
 
 BINARY_NAME=multichat
-BINARY_PATH=./cmd/multichat
+BINARY_PATH=./cmd/
 
-build: 
+build:
 	@echo "Building $(BINARY_NAME)..."
 	@go build -o $(BINARY_NAME) $(BINARY_PATH)
 	@echo "Build complete: ./$(BINARY_NAME)"
 
-run: 
+run:
 	@echo "Running $(BINARY_NAME)..."
 	@go run $(BINARY_PATH)
