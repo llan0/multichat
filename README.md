@@ -1,15 +1,10 @@
 # multichat
 
-A real time Twitch and Kick multichat client (This is an EARLY STAGE prototype)
-
-<img 
-  src="https://github.com/user-attachments/assets/95b07338-8458-4aa9-9132-30899b81f406" 
-  width="200" 
-/>
+A real time Twitch and Kick multichat client (WIP)
 
 ## How It Works
 
-The app uses a **fan in pattern** to merge multiple chat streams:
+**Fan in pattern** to merge multiple chat streams:
 
 ```mermaid
 graph LR
@@ -18,19 +13,36 @@ graph LR
     M -->|merged channel| UI[UI Consumer]
 ```
 
-1. **Producers** (`internal/adapters/`) - Independent producers run in separate goroutines, each streaming messages on their own channel
-2. **Service Layer** (`internal/service/`) - Combines all producer channels into a single unified channel
-3. **UI** (`internal/ui/`) - Consumes from the merged channel and displays messages in a thread safe Fyne window
+**Producers** (`internal/adapters/`) - producers run in separate goroutines, each streaming messages on their own channel 
+**Service Layer** (`internal/service/`) - combines all producer channels into a single unified channel 
+**UI** (`internal/ui/`) - consumes from the merged channel and displays messages in a Fyne window 
 
-## Quick Start
+## Dependencies
 
+- **Go 1.25** 
+- **fyne.io/fyne/v2** 
+- **github.com/gempir/go-twitch-irc/v4** 
+- **github.com/coder/websocket** 
+- **go.uber.org/zap** 
+
+Install dependencies:
 ```bash
+go mod download
+```
+
+## Running locally 
+```bash
+git clone git@github.com:llan0/multichat.git
+cd multichat
+go mod download
 make run
 ```
 
-Or
-
-```bash
-make build
-./multichat
-```
+## Upcoming
+- Tests 
+- Send messages
+- Render emotes
+- Auth/credentials management
+- Multiple channel support
+- Settings/preferences UI
+- Error recovery and handling improvements

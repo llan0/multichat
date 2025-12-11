@@ -3,7 +3,13 @@ module github.com/llan0/multichat
 go 1.25.0
 
 require (
-	fyne.io/fyne/v2 v2.7.1 // indirect
+	fyne.io/fyne/v2 v2.7.1
+	github.com/coder/websocket v1.8.14
+	github.com/gempir/go-twitch-irc/v4 v4.3.1
+	go.uber.org/zap v1.27.1
+)
+
+require (
 	fyne.io/systray v1.11.1-0.20250603113521-ca66a66d8b58 // indirect
 	github.com/BurntSushi/toml v1.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -31,7 +37,6 @@ require (
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
-	go.uber.org/zap v1.27.1 // indirect
 	golang.org/x/image v0.24.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect

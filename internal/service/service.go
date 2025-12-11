@@ -2,57 +2,62 @@ package service
 
 import (
 	"context"
+	"sync"
 
 	"github.com/llan0/multichat/internal/logger"
 	"github.com/llan0/multichat/internal/models"
 	"go.uber.org/zap"
 )
 
-// any chat producer that can stream messages
+// chat source that can stream messages
 type Producer interface {
 	Stream(ctx context.Context) <-chan models.ChatMessage
 }
 
-// merge twitch and kick chats using fanin pattern
-func Merge(ctx context.Context, producers ...Producer) <-chan models.ChatMessage {
+// fan in
+func Merge(ctx context.Context, log logger.Logger, producers ...Producer) <-chan models.ChatMessage {
 	merged := make(chan models.ChatMessage, 100)
-	logger.Log.Info("merging producer streams", zap.Int("producer_count", len(producers)))
+	log.Info("merging producer streams", zap.Int("producer_count", len(producers)))
+
+	var wg sync.WaitGroup
 
 	for i, producer := range producers {
-		go func(idx int, p Producer) {
+		wg.Add(1)
+
+		// get the stream channel ONCE per producer
+		stream := producer.Stream(ctx)
+
+		go func(idx int, ch <-chan models.ChatMessage) {
+			defer wg.Done()
 			defer func() {
-				logger.Log.Debug("producer goroutine exiting", zap.Int("producer_index", idx))
+				log.Debug("producer goroutine exiting", zap.Int("producer_index", idx))
 			}()
+
 			for {
 				select {
 				case <-ctx.Done():
-					logger.Log.Debug("producer context cancelled", zap.Int("producer_index", idx))
+					log.Debug("producer context cancelled", zap.Int("producer_index", idx))
 					return
-				case msg, ok := <-p.Stream(ctx):
+				case msg, ok := <-ch:
 					if !ok {
-						logger.Log.Info("producer channel closed", zap.Int("producer_index", idx))
+						log.Info("producer stream closed", zap.Int("producer_index", idx))
 						return
 					}
 					select {
 					case merged <- msg:
-						logger.Log.Debug("message merged",
-							zap.String("platform", msg.Platform),
-							zap.String("username", msg.Username),
-							zap.Int("producer_index", idx),
-						)
 					case <-ctx.Done():
 						return
 					}
 				}
 			}
-		}(i, producer)
+		}(i, stream)
 	}
 
-	// close merged channel when context is cancelled
+	// close merged channel when all producers are done
 	go func() {
-		<-ctx.Done()
-		logger.Log.Debug("closing merged channel")
+		wg.Wait()
 		close(merged)
+		log.Debug("all producers finished, merged channel closed")
 	}()
 
 	return merged

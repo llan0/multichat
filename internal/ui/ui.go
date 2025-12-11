@@ -3,13 +3,18 @@ package ui
 import (
 	"context"
 	"fmt"
+	"image/color"
+	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/llan0/multichat/internal/adapters/kick"
+	"github.com/llan0/multichat/internal/adapters/twitch"
 	"github.com/llan0/multichat/internal/logger"
 	"github.com/llan0/multichat/internal/models"
 	"github.com/llan0/multichat/internal/service"
@@ -17,98 +22,255 @@ import (
 )
 
 const (
-	appVersion  = "0.0.1"
-	channelName = "xQc"
+	appVersion   = "0.0.1"
+	windowWidth  = 380
+	windowHeight = 700
 )
 
-func ShowUI(ctx context.Context, mergedStream <-chan models.ChatMessage) {
-	logger.Log.Info("initializing UI")
-	a := app.New()
-	w := a.NewWindow(fmt.Sprintf("multichat %s", appVersion))
-	w.Resize(fyne.NewSize(400, 900))
-	w.CenterOnScreen()
+type chatMessage struct {
+	Platform string
+	Username string
+	Content  string
+	Color    color.Color
+}
 
-	// status line
-	statusText := widget.NewLabel(fmt.Sprintf("%s ", channelName))
-	statusContainer := container.NewHBox(statusText)
+type App struct {
+	log    logger.Logger
+	window fyne.Window
 
-	// chat display area with binding for threadsafe updates
-	messages := binding.NewStringList()
-	chatList := widget.NewListWithData(
-		messages,
-		func() fyne.CanvasObject {
-			label := widget.NewLabel("template")
-			label.Wrapping = fyne.TextWrapWord
-			return label
-		},
-		func(i binding.DataItem, o fyne.CanvasObject) {
-			val, _ := i.(binding.String).Get()
-			o.(*widget.Label).SetText(val)
-		},
-	)
+	ctx       context.Context
+	cancelCtx context.CancelFunc
 
-	// autoscroll on new messages
-	messages.AddListener(binding.NewDataListener(func() {
-		if messages.Length() > 0 {
-			chatList.ScrollTo(messages.Length() - 1)
-		}
-	}))
+	channelEntry *widget.Entry
+	showTwitch   bool
+	showKick     bool
 
-	// input field at bottom
-	inputEntry := widget.NewEntry()
-	inputEntry.SetPlaceHolder("Send a message")
-	inputEntry.OnSubmitted = func(text string) {
-		inputEntry.SetText("")
+	mu       sync.Mutex
+	messages []chatMessage
+	chatList *widget.List
+}
+
+func Run(log logger.Logger, defaultChannel string) {
+	a := &App{
+		log:        log,
+		messages:   make([]chatMessage, 0, 1000),
+		showTwitch: true,
+		showKick:   true,
 	}
 
-	topBar := container.NewVBox(
-		statusContainer,
+	a.createWindow()
+	a.setupLayout(defaultChannel)
+	a.connectToChannel(defaultChannel)
+
+	a.window.ShowAndRun()
+
+	if a.cancelCtx != nil {
+		a.cancelCtx()
+	}
+}
+
+func (a *App) createWindow() {
+	fyneApp := app.New()
+	fyneApp.Settings().SetTheme(theme.DarkTheme()) // TODO: depricated
+	a.window = fyneApp.NewWindow(fmt.Sprintf("multichat %s", appVersion))
+	a.window.Resize(fyne.NewSize(windowWidth, windowHeight))
+	a.window.CenterOnScreen()
+}
+
+func (a *App) setupLayout(defaultChannel string) {
+	topBar := a.createTopBar(defaultChannel)
+	a.chatList = a.createChatList()
+	chatContainer := container.NewPadded(a.chatList)
+
+	content := container.NewBorder(topBar, nil, nil, nil, chatContainer)
+	a.window.SetContent(content)
+}
+
+func (a *App) createTopBar(defaultChannel string) fyne.CanvasObject {
+	a.channelEntry = widget.NewEntry()
+	a.channelEntry.SetPlaceHolder("Enter channel name...")
+	a.channelEntry.SetText(defaultChannel)
+	a.channelEntry.OnSubmitted = func(channel string) {
+		if channel != "" {
+			a.connectToChannel(channel)
+		}
+	}
+
+	twitchCheck := widget.NewCheck("Twitch", func(checked bool) {
+		a.showTwitch = checked
+		a.chatList.Refresh()
+	})
+	twitchCheck.Checked = true
+
+	kickCheck := widget.NewCheck("Kick", func(checked bool) {
+		a.showKick = checked
+		a.chatList.Refresh()
+	})
+	kickCheck.Checked = true
+
+	filterRow := container.NewHBox(twitchCheck, kickCheck)
+	topRow := container.NewBorder(nil, nil, nil, filterRow, a.channelEntry)
+
+	return container.NewVBox(
+		container.NewPadded(topRow),
 		widget.NewSeparator(),
 	)
+}
 
-	content := container.NewBorder(
-		topBar,
-		inputEntry, // fixed at bottom
-		nil, nil,
-		chatList, // scrollable chat area
-	)
+func (a *App) connectToChannel(channel string) {
+	a.log.Info("connecting to channel", zap.String("channel", channel))
 
-	w.SetContent(content)
+	if a.cancelCtx != nil {
+		a.cancelCtx()
+	}
 
-	// consume from merged stream and update ui
+	a.mu.Lock()
+	a.messages = a.messages[:0]
+	a.mu.Unlock()
+
+	fyne.Do(func() {
+		a.chatList.Refresh()
+	})
+
+	a.ctx, a.cancelCtx = context.WithCancel(context.Background())
+
 	go func() {
-		logger.Log.Info("starting message consumer")
-		messageCount := 0
-		for msg := range mergedStream {
-			formatted := fmt.Sprintf("%s %s: %s", platformIcon(msg.Platform), msg.Username, msg.Content)
-
-			fyne.Do(func() {
-				messages.Append(formatted)
-			})
-
-			messageCount++
-			logger.Log.Debug("message displayed",
-				zap.String("platform", msg.Platform),
-				zap.String("username", msg.Username),
-				zap.Int("total_messages", messageCount),
-			)
+		twitchClient, err := twitch.NewClient(channel, a.log)
+		if err != nil {
+			a.log.Error("failed to create Twitch client", zap.Error(err))
+			return
 		}
-		logger.Log.Info("message stream closed", zap.Int("total_messages", messageCount))
+
+		kickClient, err := kick.NewClient(channel, a.log)
+		if err != nil {
+			a.log.Error("failed to create Kick client", zap.Error(err))
+			twitchClient.Close()
+			return
+		}
+
+		mergedStream := service.Merge(a.ctx, a.log, twitchClient, kickClient)
+		a.log.Info("connected to channel", zap.String("channel", channel))
+
+		for msg := range mergedStream {
+			a.addMessage(msg)
+		}
+
+		twitchClient.Close()
+		kickClient.Close()
 	}()
-
-	logger.Log.Info("showing UI window")
-	w.ShowAndRun()
-	logger.Log.Info("UI window closed")
 }
 
-// start the ui with mock producers for now
-func Start(ctx context.Context, producers ...service.Producer) {
-	logger.Log.Info("starting UI with producers", zap.Int("producer_count", len(producers)))
-	mergedStream := service.Merge(ctx, producers...)
-	ShowUI(ctx, mergedStream)
+func (a *App) filteredMessages() []chatMessage {
+	result := make([]chatMessage, 0, len(a.messages))
+	for _, msg := range a.messages {
+		if msg.Platform == "Twitch" && a.showTwitch {
+			result = append(result, msg)
+		} else if msg.Platform == "Kick" && a.showKick {
+			result = append(result, msg)
+		}
+	}
+	return result
 }
 
-// TODO: replace with actual icons
-func platformIcon(platform string) string {
-	return "[" + platform + "]"
+func (a *App) createChatList() *widget.List {
+	return widget.NewList(
+		func() int {
+			a.mu.Lock()
+			defer a.mu.Unlock()
+			return len(a.filteredMessages())
+		},
+		func() fyne.CanvasObject {
+			return a.createMessageRow()
+		},
+		func(id widget.ListItemID, obj fyne.CanvasObject) {
+			a.updateMessageRow(id, obj)
+		},
+	)
+}
+
+func (a *App) createMessageRow() fyne.CanvasObject {
+	platform := canvas.NewText("[T]", color.White)
+	platform.TextSize = 12
+
+	username := canvas.NewText("username:", color.White)
+	username.TextStyle = fyne.TextStyle{Bold: true}
+	username.TextSize = 13
+
+	content := widget.NewLabel("message content")
+	content.Truncation = fyne.TextTruncateEllipsis
+
+	left := container.NewHBox(platform, username)
+	return container.NewBorder(nil, nil, left, nil, content)
+}
+
+func (a *App) updateMessageRow(id widget.ListItemID, obj fyne.CanvasObject) {
+	a.mu.Lock()
+	filtered := a.filteredMessages()
+	if id >= len(filtered) {
+		a.mu.Unlock()
+		return
+	}
+	msg := filtered[id]
+	a.mu.Unlock()
+
+	row := obj.(*fyne.Container)
+	content := row.Objects[0].(*widget.Label)
+	left := row.Objects[1].(*fyne.Container)
+	platform := left.Objects[0].(*canvas.Text)
+	username := left.Objects[1].(*canvas.Text)
+
+	if msg.Platform == "Twitch" {
+		platform.Text = "[T]"
+		platform.Color = color.RGBA{R: 145, G: 70, B: 255, A: 255}
+	} else {
+		platform.Text = "[K]"
+		platform.Color = color.RGBA{R: 83, G: 252, B: 24, A: 255}
+	}
+	platform.Refresh()
+
+	username.Text = msg.Username + ":"
+	username.Color = msg.Color
+	username.Refresh()
+
+	content.SetText(msg.Content)
+}
+
+func (a *App) addMessage(msg models.ChatMessage) {
+	chatMsg := chatMessage{
+		Platform: msg.Platform,
+		Username: msg.Username,
+		Content:  msg.Content,
+		Color:    parseHexColor(msg.Color),
+	}
+
+	a.mu.Lock()
+	a.messages = append(a.messages, chatMsg)
+	a.mu.Unlock()
+
+	fyne.Do(func() {
+		a.chatList.Refresh()
+		a.chatList.ScrollToBottom()
+	})
+}
+
+func parseHexColor(hex string) color.Color {
+	if len(hex) == 0 {
+		return color.White
+	}
+
+	if hex[0] == '#' {
+		hex = hex[1:]
+	}
+
+	if len(hex) != 6 {
+		return color.White
+	}
+
+	var r, g, b uint8
+	_, err := fmt.Sscanf(hex, "%02x%02x%02x", &r, &g, &b)
+	if err != nil {
+		return color.White
+	}
+
+	return color.RGBA{R: r, G: g, B: b, A: 255}
 }

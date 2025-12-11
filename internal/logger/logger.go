@@ -5,20 +5,41 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var Log *zap.Logger
+type Logger interface {
+	Debug(msg string, fields ...zap.Field)
+	Info(msg string, fields ...zap.Field)
+	Warn(msg string, fields ...zap.Field)
+	Error(msg string, fields ...zap.Field)
+	Fatal(msg string, fields ...zap.Field)
+	With(fields ...zap.Field) Logger
+	Sync() error
+}
 
-func init() {
+type zapLogger struct {
+	*zap.Logger
+}
+
+func (z *zapLogger) With(fields ...zap.Field) Logger {
+	return &zapLogger{z.Logger.With(fields...)}
+}
+
+func (z *zapLogger) Sync() error {
+	return z.Logger.Sync()
+}
+
+func New() (Logger, error) {
 	config := zap.NewDevelopmentConfig()
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 
-	var err error
-	Log, err = config.Build()
+	l, err := config.Build()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
+	return &zapLogger{l}, nil
 }
 
-func Sync() {
-	_ = Log.Sync()
+// no-op logger for testing
+func NewNop() Logger {
+	return &zapLogger{zap.NewNop()}
 }
