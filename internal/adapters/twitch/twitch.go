@@ -3,10 +3,12 @@ package twitch
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/gempir/go-twitch-irc/v4"
+	"github.com/llan0/multichat/internal/emotes"
 	"github.com/llan0/multichat/internal/logger"
 	"github.com/llan0/multichat/internal/models"
 	"go.uber.org/zap"
@@ -154,13 +156,90 @@ func (c *Client) parseMessage(msg twitch.PrivateMessage) models.ChatMessage {
 		color = defaultColor
 	}
 
+	segments := c.buildSegments(msg.Message, msg.Emotes)
+
 	return models.ChatMessage{
 		Platform:  "Twitch",
 		Username:  msg.User.DisplayName,
 		Content:   msg.Message,
+		Segments:  segments,
 		Color:     color,
 		Timestamp: msg.Time,
 	}
+}
+
+// emotePosition represents a single emote occurrence in the message.
+type emotePosition struct {
+	id    string
+	name  string
+	start int
+	end   int
+}
+
+// buildSegments parses the message content and Twitch emotes into segments.
+func (c *Client) buildSegments(content string, ircEmotes []*twitch.Emote) []models.MessageSegment {
+	if len(ircEmotes) == 0 {
+		return []models.MessageSegment{{Type: models.SegmentText, Text: content}}
+	}
+
+	// Collect all emote positions
+	var positions []emotePosition
+	for _, e := range ircEmotes {
+		for _, pos := range e.Positions {
+			positions = append(positions, emotePosition{
+				id:    e.ID,
+				name:  e.Name,
+				start: pos.Start,
+				end:   pos.End,
+			})
+		}
+	}
+
+	// Sort by start position
+	sort.Slice(positions, func(i, j int) bool {
+		return positions[i].start < positions[j].start
+	})
+
+	// Build segments
+	var segments []models.MessageSegment
+	lastEnd := 0
+	contentRunes := []rune(content)
+
+	for _, pos := range positions {
+		// Add text before this emote
+		if pos.start > lastEnd {
+			text := string(contentRunes[lastEnd:pos.start])
+			if text != "" {
+				segments = append(segments, models.MessageSegment{
+					Type: models.SegmentText,
+					Text: text,
+				})
+			}
+		}
+
+		// Add emote segment
+		segments = append(segments, models.MessageSegment{
+			Type:      models.SegmentEmote,
+			EmoteID:   pos.id,
+			EmoteURL:  emotes.BuildTwitchEmoteURL(pos.id),
+			EmoteName: pos.name,
+		})
+
+		lastEnd = pos.end + 1
+	}
+
+	// Add remaining text after last emote
+	if lastEnd < len(contentRunes) {
+		text := string(contentRunes[lastEnd:])
+		if text != "" {
+			segments = append(segments, models.MessageSegment{
+				Type: models.SegmentText,
+				Text: text,
+			})
+		}
+	}
+
+	return segments
 }
 
 func (c *Client) connect(conn *twitch.Client, disconnected chan<- struct{}) {

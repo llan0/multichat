@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sync"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 	"github.com/llan0/multichat/internal/models"
 	"go.uber.org/zap"
 )
+
+var kickEmoteRegex = regexp.MustCompile(`\[emote:(\d+):([^\]]+)\]`)
 
 const (
 	defaultColor   = "#53FC18"
@@ -81,14 +84,14 @@ func NewClientWithConfig(cfg Config, log logger.Logger) (*Client, error) {
 	}, nil
 }
 
-// returns a channel of chat messages.
+// returns a channel of chat messages
 func (c *Client) Stream(ctx context.Context) <-chan models.ChatMessage {
 	out := make(chan models.ChatMessage, channelBufSize)
 	go c.streamLoop(ctx, out)
 	return out
 }
 
-// gracefully shuts down the client.
+// gracefully shuts down the client
 func (c *Client) Close() error {
 	c.mu.Lock()
 	c.closed = true
@@ -292,13 +295,70 @@ func (c *Client) parseMessage(data string) (models.ChatMessage, error) {
 		return models.ChatMessage{}, err
 	}
 
+	segments := parseKickEmotes(msg.Content)
+
 	return models.ChatMessage{
 		Platform:  "Kick",
 		Username:  msg.Sender.Username,
 		Content:   msg.Content,
+		Segments:  segments,
 		Color:     defaultColor,
 		Timestamp: time.Now(),
 	}, nil
+}
+
+// Kick emotes are in format [emote:ID:Name]
+func parseKickEmotes(content string) []models.MessageSegment {
+	matches := kickEmoteRegex.FindAllStringSubmatchIndex(content, -1)
+	if len(matches) == 0 {
+		return []models.MessageSegment{{Type: models.SegmentText, Text: content}}
+	}
+
+	var segments []models.MessageSegment
+	lastEnd := 0
+
+	for _, match := range matches {
+		// match[0]:match[1] is the full match
+		// match[2]:match[3] is the emote ID
+		// match[4]:match[5] is the emote name
+		start, end := match[0], match[1]
+		emoteID := content[match[2]:match[3]]
+		emoteName := content[match[4]:match[5]]
+
+		// Add text before this emote
+		if start > lastEnd {
+			text := content[lastEnd:start]
+			if text != "" {
+				segments = append(segments, models.MessageSegment{
+					Type: models.SegmentText,
+					Text: text,
+				})
+			}
+		}
+
+		// Add emote segment
+		segments = append(segments, models.MessageSegment{
+			Type:      models.SegmentEmote,
+			EmoteID:   emoteID,
+			EmoteURL:  fmt.Sprintf("https://files.kick.com/emotes/%s/fullsize", emoteID),
+			EmoteName: emoteName,
+		})
+
+		lastEnd = end
+	}
+
+	// Add remaining text
+	if lastEnd < len(content) {
+		text := content[lastEnd:]
+		if text != "" {
+			segments = append(segments, models.MessageSegment{
+				Type: models.SegmentText,
+				Text: text,
+			})
+		}
+	}
+
+	return segments
 }
 
 func (c *Client) disconnect() {
@@ -323,9 +383,7 @@ func (c *Client) backoff(ctx context.Context, delay time.Duration) time.Duration
 	}
 
 	next := time.Duration(float64(delay) * c.config.RetryConfig.Multiplier)
-	if next > c.config.RetryConfig.MaxDelay {
-		next = c.config.RetryConfig.MaxDelay
-	}
+	next = max(next, c.config.RetryConfig.MaxDelay)
 	return next
 }
 

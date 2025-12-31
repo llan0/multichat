@@ -15,6 +15,7 @@ import (
 
 	"github.com/llan0/multichat/internal/adapters/kick"
 	"github.com/llan0/multichat/internal/adapters/twitch"
+	"github.com/llan0/multichat/internal/emotes"
 	"github.com/llan0/multichat/internal/logger"
 	"github.com/llan0/multichat/internal/models"
 	"github.com/llan0/multichat/internal/service"
@@ -31,6 +32,7 @@ type chatMessage struct {
 	Platform string
 	Username string
 	Content  string
+	Segments []models.MessageSegment
 	Color    color.Color
 }
 
@@ -45,6 +47,8 @@ type App struct {
 	showTwitch   bool
 	showKick     bool
 
+	emoteService *emotes.Service
+
 	mu       sync.Mutex
 	messages []chatMessage
 	chatList *widget.List
@@ -52,10 +56,11 @@ type App struct {
 
 func Run(log logger.Logger, defaultChannel string) {
 	a := &App{
-		log:        log,
-		messages:   make([]chatMessage, 0, 1000),
-		showTwitch: true,
-		showKick:   true,
+		log:          log,
+		messages:     make([]chatMessage, 0, 1000),
+		showTwitch:   true,
+		showKick:     true,
+		emoteService: emotes.NewService(log),
 	}
 
 	a.createWindow()
@@ -197,8 +202,8 @@ func (a *App) createMessageRow() fyne.CanvasObject {
 	username.TextStyle = fyne.TextStyle{Bold: true}
 	username.TextSize = 13
 
-	content := widget.NewLabel("message content")
-	content.Truncation = fyne.TextTruncateEllipsis
+	// Use hbox for content to support mixed text/images
+	content := container.NewHBox()
 
 	left := container.NewHBox(platformIcon, username)
 	return container.NewBorder(nil, nil, left, nil, content)
@@ -215,7 +220,7 @@ func (a *App) updateMessageRow(id widget.ListItemID, obj fyne.CanvasObject) {
 	a.mu.Unlock()
 
 	row := obj.(*fyne.Container)
-	content := row.Objects[0].(*widget.Label)
+	content := row.Objects[0].(*fyne.Container)
 	left := row.Objects[1].(*fyne.Container)
 	platformIcon := left.Objects[0].(*canvas.Image)
 	username := left.Objects[1].(*canvas.Text)
@@ -231,7 +236,52 @@ func (a *App) updateMessageRow(id widget.ListItemID, obj fyne.CanvasObject) {
 	username.Color = msg.Color
 	username.Refresh()
 
-	content.SetText(msg.Content)
+	// Build content with text and emote images
+	a.buildMessageContent(content, msg)
+}
+
+func (a *App) buildMessageContent(container *fyne.Container, msg chatMessage) {
+	container.Objects = nil
+
+	// If no segments, fall back to plain text
+	if len(msg.Segments) == 0 {
+		label := widget.NewLabel(msg.Content)
+		label.Truncation = fyne.TextTruncateEllipsis
+		container.Objects = append(container.Objects, label)
+		container.Refresh()
+		return
+	}
+
+	for _, seg := range msg.Segments {
+		switch seg.Type {
+		case models.SegmentText:
+			if seg.Text != "" {
+				text := canvas.NewText(seg.Text, color.White)
+				text.TextSize = 13
+				container.Objects = append(container.Objects, text)
+			}
+		case models.SegmentEmote:
+			img := a.createEmoteImage(seg.EmoteURL)
+			container.Objects = append(container.Objects, img)
+		}
+	}
+
+	container.Refresh()
+}
+
+func (a *App) createEmoteImage(url string) fyne.CanvasObject {
+	resource := a.emoteService.GetImage(url, func() {
+		// Callback when image loads - refresh the list
+		fyne.Do(func() {
+			a.chatList.Refresh()
+		})
+	})
+
+	img := canvas.NewImageFromResource(resource)
+	img.FillMode = canvas.ImageFillContain
+	img.SetMinSize(fyne.NewSize(24, 24))
+
+	return img
 }
 
 func (a *App) addMessage(msg models.ChatMessage) {
@@ -239,6 +289,7 @@ func (a *App) addMessage(msg models.ChatMessage) {
 		Platform: msg.Platform,
 		Username: msg.Username,
 		Content:  msg.Content,
+		Segments: msg.Segments,
 		Color:    parseHexColor(msg.Color),
 	}
 
