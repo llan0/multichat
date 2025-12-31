@@ -2,6 +2,11 @@
 
 A real time Twitch and Kick multichat client (WIP)
 
+<img 
+  src="https://github.com/user-attachments/assets/9bb0f3d3-c487-4ccf-9bfe-3d7b86d2817f" 
+  width="280" 
+/>
+
 ## How It Works
 
 **Fan in pattern** to merge multiple chat streams:
