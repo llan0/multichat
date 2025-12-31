@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"image/color"
 	"sync"
@@ -20,6 +21,17 @@ import (
 	"github.com/llan0/multichat/internal/models"
 	"github.com/llan0/multichat/internal/service"
 	"go.uber.org/zap"
+)
+
+//go:embed assets/twitch.png
+var twitchIconData []byte
+
+//go:embed assets/kick.png
+var kickIconData []byte
+
+var (
+	twitchIcon = fyne.NewStaticResource("twitch.png", twitchIconData)
+	kickIcon   = fyne.NewStaticResource("kick.png", kickIconData)
 )
 
 const (
@@ -194,7 +206,7 @@ func (a *App) createChatList() *widget.List {
 }
 
 func (a *App) createMessageRow() fyne.CanvasObject {
-	platformIcon := canvas.NewImageFromFile("internal/ui/assets/twitch.png")
+	platformIcon := canvas.NewImageFromResource(twitchIcon)
 	platformIcon.FillMode = canvas.ImageFillContain
 	platformIcon.SetMinSize(fyne.NewSize(16, 16))
 
@@ -226,9 +238,9 @@ func (a *App) updateMessageRow(id widget.ListItemID, obj fyne.CanvasObject) {
 	username := left.Objects[1].(*canvas.Text)
 
 	if msg.Platform == "Twitch" {
-		platformIcon.File = "internal/ui/assets/twitch.png"
+		platformIcon.Resource = twitchIcon
 	} else {
-		platformIcon.File = "internal/ui/assets/kick.png"
+		platformIcon.Resource = kickIcon
 	}
 	platformIcon.Refresh()
 

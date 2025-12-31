@@ -45,6 +45,9 @@ type chatMessageData struct {
 	Content string `json:"content"`
 	Sender  struct {
 		Username string `json:"username"`
+		Identity struct {
+			Color string `json:"color"`
+		} `json:"identity"`
 	} `json:"sender"`
 }
 
@@ -297,12 +300,17 @@ func (c *Client) parseMessage(data string) (models.ChatMessage, error) {
 
 	segments := parseKickEmotes(msg.Content)
 
+	color := msg.Sender.Identity.Color
+	if color == "" {
+		color = defaultColor
+	}
+
 	return models.ChatMessage{
 		Platform:  "Kick",
 		Username:  msg.Sender.Username,
 		Content:   msg.Content,
 		Segments:  segments,
-		Color:     defaultColor,
+		Color:     color,
 		Timestamp: time.Now(),
 	}, nil
 }

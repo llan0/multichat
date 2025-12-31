@@ -7,6 +7,7 @@ require (
 	github.com/coder/websocket v1.8.14
 	github.com/gempir/go-twitch-irc/v4 v4.3.1
 	go.uber.org/zap v1.27.1
+	golang.org/x/image v0.24.0
 )
 
 require (
@@ -37,7 +38,6 @@ require (
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
-	golang.org/x/image v0.24.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.22.0 // indirect

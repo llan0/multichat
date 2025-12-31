@@ -3,6 +3,12 @@ package main
 import (
 	"os"
 
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+
+	_ "golang.org/x/image/webp"
+
 	"github.com/llan0/multichat/internal/logger"
 	"github.com/llan0/multichat/internal/ui"
 )
