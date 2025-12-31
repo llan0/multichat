@@ -71,7 +71,7 @@ func Run(log logger.Logger, defaultChannel string) {
 
 func (a *App) createWindow() {
 	fyneApp := app.New()
-	fyneApp.Settings().SetTheme(theme.DarkTheme()) // TODO: depricated
+	fyneApp.Settings().SetTheme(theme.DefaultTheme())
 	a.window = fyneApp.NewWindow(fmt.Sprintf("multichat %s", appVersion))
 	a.window.Resize(fyne.NewSize(windowWidth, windowHeight))
 	a.window.CenterOnScreen()
@@ -189,8 +189,9 @@ func (a *App) createChatList() *widget.List {
 }
 
 func (a *App) createMessageRow() fyne.CanvasObject {
-	platform := canvas.NewText("[T]", color.White)
-	platform.TextSize = 12
+	platformIcon := canvas.NewImageFromFile("internal/ui/assets/twitch.png")
+	platformIcon.FillMode = canvas.ImageFillContain
+	platformIcon.SetMinSize(fyne.NewSize(16, 16))
 
 	username := canvas.NewText("username:", color.White)
 	username.TextStyle = fyne.TextStyle{Bold: true}
@@ -199,7 +200,7 @@ func (a *App) createMessageRow() fyne.CanvasObject {
 	content := widget.NewLabel("message content")
 	content.Truncation = fyne.TextTruncateEllipsis
 
-	left := container.NewHBox(platform, username)
+	left := container.NewHBox(platformIcon, username)
 	return container.NewBorder(nil, nil, left, nil, content)
 }
 
@@ -216,17 +217,15 @@ func (a *App) updateMessageRow(id widget.ListItemID, obj fyne.CanvasObject) {
 	row := obj.(*fyne.Container)
 	content := row.Objects[0].(*widget.Label)
 	left := row.Objects[1].(*fyne.Container)
-	platform := left.Objects[0].(*canvas.Text)
+	platformIcon := left.Objects[0].(*canvas.Image)
 	username := left.Objects[1].(*canvas.Text)
 
 	if msg.Platform == "Twitch" {
-		platform.Text = "[T]"
-		platform.Color = color.RGBA{R: 145, G: 70, B: 255, A: 255}
+		platformIcon.File = "internal/ui/assets/twitch.png"
 	} else {
-		platform.Text = "[K]"
-		platform.Color = color.RGBA{R: 83, G: 252, B: 24, A: 255}
+		platformIcon.File = "internal/ui/assets/kick.png"
 	}
-	platform.Refresh()
+	platformIcon.Refresh()
 
 	username.Text = msg.Username + ":"
 	username.Color = msg.Color
