@@ -1,7 +1,7 @@
 <div align="center">
   <img width="130" alt="icon" src="https://github.com/user-attachments/assets/34e1e11f-8fe4-4689-8340-1a905db13ea9" />
   <h3>Multichat </h3>
-  <p>  Twitch and Kick multichat client <i> (WIP)</i> </p> 
+  <p>  Twitch and Kick multichat client <i> (WIP 🚨)</i> </p> 
   <img 
     src="https://github.com/user-attachments/assets/a80c114a-8ab3-4a88-87a4-f37fac7380fc" 
     width="" 
