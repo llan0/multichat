@@ -46,7 +46,7 @@ make run
 ## Upcoming
 - Tests 
 - Send messages
-- Render emotes
+- Render emotes (BBTV, 7TV, FFZ)
 - Auth/credentials management
 - Multiple channel support
 - Settings/preferences UI
