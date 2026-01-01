@@ -1,12 +1,8 @@
-# multichat
-
-A Twitch and Kick multichat client (WIP)
-
-<img 
-  src="https://github.com/user-attachments/assets/c3539372-606d-4aa7-b7fd-db585e77fa35" 
-  width="280" 
-/>
-
+<div align="center">
+  <img width="130" alt="icon" src="https://github.com/user-attachments/assets/34e1e11f-8fe4-4689-8340-1a905db13ea9" />
+  <h3>multichat</h3>
+  <p>A Twitch and Kick multichat client (WIP)</p>
+</div>
 
 ## How It Works
 
