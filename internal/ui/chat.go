@@ -2,13 +2,9 @@ package ui
 
 import (
 	"context"
-	_ "embed"
-	"fmt"
 	"image/color"
-	"sync"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
@@ -16,28 +12,9 @@ import (
 
 	"github.com/llan0/multichat/internal/adapters/kick"
 	"github.com/llan0/multichat/internal/adapters/twitch"
-	"github.com/llan0/multichat/internal/emotes"
-	"github.com/llan0/multichat/internal/logger"
 	"github.com/llan0/multichat/internal/models"
 	"github.com/llan0/multichat/internal/service"
 	"go.uber.org/zap"
-)
-
-//go:embed assets/twitch.png
-var twitchIconData []byte
-
-//go:embed assets/kick.png
-var kickIconData []byte
-
-var (
-	twitchIcon = fyne.NewStaticResource("twitch.png", twitchIconData)
-	kickIcon   = fyne.NewStaticResource("kick.png", kickIconData)
-)
-
-const (
-	appVersion   = "0.0.1"
-	windowWidth  = 380
-	windowHeight = 700
 )
 
 type chatMessage struct {
@@ -48,59 +25,13 @@ type chatMessage struct {
 	Color    color.Color
 }
 
-type App struct {
-	log    logger.Logger
-	window fyne.Window
-
-	ctx       context.Context
-	cancelCtx context.CancelFunc
-
-	channelEntry *widget.Entry
-	showTwitch   bool
-	showKick     bool
-
-	emoteService *emotes.Service
-
-	mu       sync.Mutex
-	messages []chatMessage
-	chatList *widget.List
-}
-
-func Run(log logger.Logger, defaultChannel string) {
-	a := &App{
-		log:          log,
-		messages:     make([]chatMessage, 0, 1000),
-		showTwitch:   true,
-		showKick:     true,
-		emoteService: emotes.NewService(log),
-	}
-
-	a.createWindow()
-	a.setupLayout(defaultChannel)
-	a.connectToChannel(defaultChannel)
-
-	a.window.ShowAndRun()
-
-	if a.cancelCtx != nil {
-		a.cancelCtx()
-	}
-}
-
-func (a *App) createWindow() {
-	fyneApp := app.New()
-	fyneApp.Settings().SetTheme(theme.DefaultTheme())
-	a.window = fyneApp.NewWindow(fmt.Sprintf("multichat %s", appVersion))
-	a.window.Resize(fyne.NewSize(windowWidth, windowHeight))
-	a.window.CenterOnScreen()
-}
-
-func (a *App) setupLayout(defaultChannel string) {
+func (a *App) createChatTab(defaultChannel string) *container.TabItem {
 	topBar := a.createTopBar(defaultChannel)
 	a.chatList = a.createChatList()
 	chatContainer := container.NewPadded(a.chatList)
 
 	content := container.NewBorder(topBar, nil, nil, nil, chatContainer)
-	a.window.SetContent(content)
+	return container.NewTabItem(defaultChannel, content)
 }
 
 func (a *App) createTopBar(defaultChannel string) fyne.CanvasObject {
@@ -125,8 +56,12 @@ func (a *App) createTopBar(defaultChannel string) fyne.CanvasObject {
 	})
 	kickCheck.Checked = true
 
+	settingsBtn := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+		a.openSettings()
+	})
+
 	filterRow := container.NewHBox(twitchCheck, kickCheck)
-	topRow := container.NewBorder(nil, nil, nil, filterRow, a.channelEntry)
+	topRow := container.NewBorder(nil, nil, settingsBtn, filterRow, a.channelEntry)
 
 	return container.NewVBox(
 		container.NewPadded(topRow),
@@ -210,11 +145,10 @@ func (a *App) createMessageRow() fyne.CanvasObject {
 	platformIcon.FillMode = canvas.ImageFillContain
 	platformIcon.SetMinSize(fyne.NewSize(16, 16))
 
-	username := canvas.NewText("username:", color.White)
+	username := canvas.NewText("username:", theme.ForegroundColor())
 	username.TextStyle = fyne.TextStyle{Bold: true}
 	username.TextSize = 13
 
-	// Use hbox for content to support mixed text/images
 	content := container.NewHBox()
 
 	left := container.NewHBox(platformIcon, username)
@@ -248,14 +182,12 @@ func (a *App) updateMessageRow(id widget.ListItemID, obj fyne.CanvasObject) {
 	username.Color = msg.Color
 	username.Refresh()
 
-	// Build content with text and emote images
 	a.buildMessageContent(content, msg)
 }
 
 func (a *App) buildMessageContent(container *fyne.Container, msg chatMessage) {
 	container.Objects = nil
 
-	// If no segments, fall back to plain text
 	if len(msg.Segments) == 0 {
 		label := widget.NewLabel(msg.Content)
 		label.Truncation = fyne.TextTruncateEllipsis
@@ -268,7 +200,7 @@ func (a *App) buildMessageContent(container *fyne.Container, msg chatMessage) {
 		switch seg.Type {
 		case models.SegmentText:
 			if seg.Text != "" {
-				text := canvas.NewText(seg.Text, color.White)
+				text := canvas.NewText(seg.Text, theme.ForegroundColor())
 				text.TextSize = 13
 				container.Objects = append(container.Objects, text)
 			}
@@ -283,7 +215,6 @@ func (a *App) buildMessageContent(container *fyne.Container, msg chatMessage) {
 
 func (a *App) createEmoteImage(url string) fyne.CanvasObject {
 	resource := a.emoteService.GetImage(url, func() {
-		// Callback when image loads - refresh the list
 		fyne.Do(func() {
 			a.chatList.Refresh()
 		})
@@ -313,26 +244,4 @@ func (a *App) addMessage(msg models.ChatMessage) {
 		a.chatList.Refresh()
 		a.chatList.ScrollToBottom()
 	})
-}
-
-func parseHexColor(hex string) color.Color {
-	if len(hex) == 0 {
-		return color.White
-	}
-
-	if hex[0] == '#' {
-		hex = hex[1:]
-	}
-
-	if len(hex) != 6 {
-		return color.White
-	}
-
-	var r, g, b uint8
-	_, err := fmt.Sscanf(hex, "%02x%02x%02x", &r, &g, &b)
-	if err != nil {
-		return color.White
-	}
-
-	return color.RGBA{R: r, G: g, B: b, A: 255}
 }
