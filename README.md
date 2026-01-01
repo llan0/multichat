@@ -3,12 +3,10 @@
   <h3>Multichat </h3>
   <p>  Twitch and Kick multichat client <i> (WIP)</i> </p> 
   <img 
-    src="https://github.com/user-attachments/assets/9bb0f3d3-c487-4ccf-9bfe-3d7b86d2817f" 
+    src="https://github.com/user-attachments/assets/5c1f03fb-8bb2-49eb-aaae-295807bedba5" 
     width="290" 
   />
 </div>
-
-
 
 ## How It Works
 
