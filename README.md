@@ -8,6 +8,35 @@
   />
 </div>
 
+## Installation
+
+**Requirements:** Go 1.25+
+
+```bash
+git clone https://github.com/llan0/multichat.git
+cd multichat
+make build
+./multichat
+```
+
+Or run directly:
+```bash
+make run
+```
+
+### Usage
+
+```bash
+# Run with default channel
+./multichat
+
+# Run with specific channel
+./multichat <channel>
+
+# Show version
+./multichat -version
+```
+
 ## How It Works
 
 **Fan in pattern** to merge multiple chat streams:
@@ -30,23 +59,24 @@ graph LR
 - `github.com/coder/websocket`
 - `go.uber.org/zap`
 
-Install dependencies:
-```bash
-go mod download
-```
+## Development
 
-## Running locally 
 ```bash
-git clone git@github.com:llan0/multichat.git
-cd multichat
-go mod download
-make test 
-make run
+# Run tests
+make test
+
+# Build binary
+make build
+
+# Clean build artifacts
+make clean
+
+# Show version
+make version
 ```
 
 ## Upcoming
-- Auth/credentials management
+- Auth management
 - Send messages
-- Settings/preferences UI
 - Render emotes (BBTV, 7TV, FFZ)
 - Multiple channel support
