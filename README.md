@@ -3,8 +3,8 @@
   <h3>Multichat </h3>
   <p>  Twitch and Kick multichat client <i> (WIP)</i> </p> 
   <img 
-    src="https://github.com/user-attachments/assets/5c1f03fb-8bb2-49eb-aaae-295807bedba5" 
-    width="290" 
+    src="https://github.com/user-attachments/assets/a80c114a-8ab3-4a88-87a4-f37fac7380fc" 
+    width="" 
   />
 </div>
 
