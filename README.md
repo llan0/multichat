@@ -18,17 +18,16 @@ graph LR
     M -->|merged channel| UI[UI Consumer]
 ```
 
-**Producers** (`internal/adapters/`) - producers run in separate goroutines, each streaming messages on their own channel 
-**Service Layer** (`internal/service/`) - combines all producer channels into a single unified channel 
-**UI** (`internal/ui/`) - consumes from the merged channel and displays messages in a Fyne window 
+- **Producers** (`internal/adapters/`) - producers run in separate goroutines, each streaming messages on their own channel 
+- **Service Layer** (`internal/service/`) - combines all producer channels into a single unified channel 
+- **UI** (`internal/ui/`) - consumes from the merged channel and displays messages in a Fyne window 
 
 ## Dependencies
 
-- **Go 1.25** 
-- **fyne.io/fyne/v2** 
-- **github.com/gempir/go-twitch-irc/v4** 
-- **github.com/coder/websocket** 
-- **go.uber.org/zap** 
+- `fyne.io/fyne/v2`
+- `github.com/gempir/go-twitch-irc/v4`
+- `github.com/coder/websocket`
+- `go.uber.org/zap`
 
 Install dependencies:
 ```bash
@@ -40,14 +39,13 @@ go mod download
 git clone git@github.com:llan0/multichat.git
 cd multichat
 go mod download
+make test 
 make run
 ```
 
 ## Upcoming
-- Tests 
-- Send messages
-- Render emotes (BBTV, 7TV, FFZ)
 - Auth/credentials management
-- Multiple channel support
+- Send messages
 - Settings/preferences UI
-- Error recovery and handling improvements
+- Render emotes (BBTV, 7TV, FFZ)
+- Multiple channel support

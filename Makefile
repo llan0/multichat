@@ -1,13 +1,18 @@
-.PHONY: build run
-
 BINARY_NAME=multichat
 BINARY_PATH=./cmd/
 
-build:
-	@echo "Building $(BINARY_NAME)..."
-	@go build -o $(BINARY_NAME) $(BINARY_PATH)
-	@echo "Build complete: ./$(BINARY_NAME)"
+.PHONY: test
+test:
+	go test ./...
 
+.PHONY: build
+build:
+	go build -o $(BINARY_NAME) $(BINARY_PATH)
+
+.PHONY: run
 run:
-	@echo "Running $(BINARY_NAME)..."
-	@go run $(BINARY_PATH)
+	go run $(BINARY_PATH)
+
+.PHONY: clean
+clean:
+	rm -f $(BINARY_NAME)
