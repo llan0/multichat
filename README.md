@@ -3,9 +3,10 @@
 A Twitch and Kick multichat client (WIP)
 
 <img 
-  src="https://github.com/user-attachments/assets/9bb0f3d3-c487-4ccf-9bfe-3d7b86d2817f" 
+  src="https://github.com/user-attachments/assets/c3539372-606d-4aa7-b7fd-db585e77fa35" 
   width="280" 
 />
+
 
 ## How It Works
 
