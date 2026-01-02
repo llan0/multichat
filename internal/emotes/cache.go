@@ -1,6 +1,7 @@
 package emotes
 
 import (
+	"container/list"
 	"io"
 	"net/http"
 	"sync"
@@ -9,15 +10,22 @@ import (
 	"fyne.io/fyne/v2"
 )
 
+const (
+	maxCacheEntries = 500 // max emotes to keep in cache
+)
+
 type cacheEntry struct {
+	key      string
 	resource fyne.Resource
 	loading  bool
+	element  *list.Element // for LRU tracking
 }
 
-// thread safe caching for emote images
+// thread safe caching for emote images with LRU eviction
 type ImageCache struct {
 	mu      sync.RWMutex
 	entries map[string]*cacheEntry
+	lru     *list.List // front = most recently used
 	client  *http.Client
 }
 
@@ -25,20 +33,25 @@ type ImageCache struct {
 func NewImageCache() *ImageCache {
 	return &ImageCache{
 		entries: make(map[string]*cacheEntry),
+		lru:     list.New(),
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
 	}
 }
 
-// return a cache  if available
+// return a cache if available, updates LRU position
 func (c *ImageCache) Get(key string) (fyne.Resource, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	entry, ok := c.entries[key]
 	if !ok || entry.resource == nil {
 		return nil, false
+	}
+	// move to front (most recently used)
+	if entry.element != nil {
+		c.lru.MoveToFront(entry.element)
 	}
 	return entry.resource, true
 }
@@ -52,6 +65,10 @@ func (c *ImageCache) GetOrLoad(key, url string, onLoaded func(fyne.Resource)) (f
 	entry, ok := c.entries[key]
 	if ok {
 		if entry.resource != nil {
+			// move to front (most recently used)
+			if entry.element != nil {
+				c.lru.MoveToFront(entry.element)
+			}
 			c.mu.Unlock()
 			return entry.resource, false
 		}
@@ -62,7 +79,7 @@ func (c *ImageCache) GetOrLoad(key, url string, onLoaded func(fyne.Resource)) (f
 	}
 
 	// start loading
-	entry = &cacheEntry{loading: true}
+	entry = &cacheEntry{key: key, loading: true}
 	c.entries[key] = entry
 	c.mu.Unlock()
 
@@ -96,11 +113,29 @@ func (c *ImageCache) loadAsync(key, url string, onLoaded func(fyne.Resource)) {
 	if entry, ok := c.entries[key]; ok {
 		entry.resource = resource
 		entry.loading = false
+		// add to LRU list
+		entry.element = c.lru.PushFront(entry)
+		// evict oldest entries if cache is full
+		c.evictOldest()
 	}
 	c.mu.Unlock()
 
 	if onLoaded != nil {
 		onLoaded(resource)
+	}
+}
+
+// evictOldest removes least recently used entries until cache is within limit
+// must be called with lock held
+func (c *ImageCache) evictOldest() {
+	for c.lru.Len() > maxCacheEntries {
+		oldest := c.lru.Back()
+		if oldest == nil {
+			break
+		}
+		entry := oldest.Value.(*cacheEntry)
+		c.lru.Remove(oldest)
+		delete(c.entries, entry.key)
 	}
 }
 
@@ -118,4 +153,5 @@ func (c *ImageCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries = make(map[string]*cacheEntry)
+	c.lru = list.New()
 }

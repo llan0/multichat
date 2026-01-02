@@ -110,16 +110,22 @@ func (c *Client) runSession(ctx context.Context, out chan<- models.ChatMessage) 
 	msgChan := make(chan models.ChatMessage, channelBufSize)
 	disconnected := make(chan struct{})
 	var connectErr error
+	var wg sync.WaitGroup
 
 	c.setConn(conn)
 	c.registerHandlers(conn, msgChan, &connectErr)
 
 	conn.Join(c.config.Channel)
 
-	go c.connect(conn, disconnected)
+	wg.Go(func() {
+		c.connect(conn, disconnected)
+	})
 
 	c.forwardMessages(ctx, msgChan, out, disconnected)
 	c.disconnect(msgChan)
+
+	// wait for connect goroutine to finish
+	wg.Wait()
 
 	return connectErr
 }

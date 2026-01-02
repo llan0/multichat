@@ -19,6 +19,7 @@ const (
 	appVersion   = "0.0.1"
 	windowWidth  = 380
 	windowHeight = 700
+	maxMessages  = 500 // max messages to keep in mem
 )
 
 type App struct {
@@ -28,6 +29,7 @@ type App struct {
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
+	connWg    sync.WaitGroup // track connection goroutine lifecycle
 
 	// chat state
 	channelEntry *widget.Entry
@@ -47,7 +49,7 @@ type App struct {
 func Run(log logger.Logger, defaultChannel string) {
 	a := &App{
 		log:          log,
-		messages:     make([]chatMessage, 0, 1000),
+		messages:     make([]chatMessage, 0, maxMessages),
 		showTwitch:   true,
 		showKick:     true,
 		emoteService: emotes.NewService(log),
@@ -59,8 +61,10 @@ func Run(log logger.Logger, defaultChannel string) {
 
 	a.window.ShowAndRun()
 
+	// cancel context and wait for goroutines
 	if a.cancelCtx != nil {
 		a.cancelCtx()
+		a.connWg.Wait()
 	}
 }
 

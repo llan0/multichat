@@ -72,8 +72,10 @@ func (a *App) createTopBar(defaultChannel string) fyne.CanvasObject {
 func (a *App) connectToChannel(channel string) {
 	a.log.Info("connecting to channel", zap.String("channel", channel))
 
+	// cancel previous connection and wait for cleanup
 	if a.cancelCtx != nil {
 		a.cancelCtx()
+		a.connWg.Wait() // wait for previous goroutine to finish
 	}
 
 	a.mu.Lock()
@@ -86,7 +88,7 @@ func (a *App) connectToChannel(channel string) {
 
 	a.ctx, a.cancelCtx = context.WithCancel(context.Background())
 
-	go func() {
+	a.connWg.Go(func() {
 		twitchClient, err := twitch.NewClient(channel, a.log)
 		if err != nil {
 			a.log.Error("failed to create Twitch client", zap.Error(err))
@@ -109,7 +111,7 @@ func (a *App) connectToChannel(channel string) {
 
 		twitchClient.Close()
 		kickClient.Close()
-	}()
+	})
 }
 
 func (a *App) filteredMessages() []chatMessage {
@@ -238,6 +240,12 @@ func (a *App) addMessage(msg models.ChatMessage) {
 
 	a.mu.Lock()
 	a.messages = append(a.messages, chatMsg)
+	// evict old messages to prevent unbounded memory growth
+	if len(a.messages) > maxMessages {
+		// remove oldest messages, keep last maxMessages
+		copy(a.messages, a.messages[len(a.messages)-maxMessages:])
+		a.messages = a.messages[:maxMessages]
+	}
 	a.mu.Unlock()
 
 	fyne.Do(func() {
